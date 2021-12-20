@@ -4,6 +4,8 @@ import "p5/lib/addons/p5.sound";
 import * as p5 from "p5";
 import { Midi } from '@tonejs/midi'
 import PlayIcon from './functions/PlayIcon.js';
+import ShuffleArray from './functions/ShuffleArray.js';
+import Octagon from './classes/Octagon.js';
 
 import audio from "../audio/octagons-no-1.ogg";
 import midi from "../audio/octagons-no-1.mid";
@@ -107,10 +109,10 @@ const P5SketchWithAudio = () => {
         p.loadMidi = () => {
             Midi.fromUrl(midi).then(
                 function(result) {
-                    console.log(result);
-                    //const noteSet1 = result.tracks[5].notes; // Synth 2 - SynthBass2
                     const noteSet1 = result.tracks[2].notes.filter(note => note.midi !== 43); // Redrum 1 - RnB Kit 04
+                    const noteSet2 = result.tracks[4].notes; // Synth 3 - Eject
                     p.scheduleCueSet(noteSet1, 'executeCueSet1');
+                    p.scheduleCueSet(noteSet2, 'executeCueSet2');
                     p.audioLoaded = true;
                     document.getElementById("loader").classList.add("loading--complete");
                     document.getElementById("play-icon").classList.remove("fade-out");
@@ -139,43 +141,79 @@ const P5SketchWithAudio = () => {
             }
         } 
 
+        p.melodicOctagons = [];
+
         p.setup = () => {
             p.canvas = p.createCanvas(p.canvasWidth, p.canvasHeight);
             p.startingCount = Math.floor(Math.random() * 8) + 1;
             p.background(0, 0, 0, 0);
             p.strokeWeight(p.width / 2048);
+            p.populateMelodicOctagons();
         }
 
         p.draw = () => {
             if(p.audioLoaded && p.song.isPlaying()){
-
+                for (let i = 0; i < p.melodicOctagons.length; i++) {
+                    const octagon = p.melodicOctagons[i];
+                    octagon.draw();
+                    octagon.update();
+                }
             }
         }
 
         p.executeCueSet1 = (note) => {
             const { currentCue, ticks } = note, 
-                reducer = 6 - (ticks % 61440) / 7680,
-                start = p.millis();
-            if(currentCue % 8 === 0){
-                p.startingCount = Math.floor(Math.random() * 8) + 1;
-                if(currentCue >= 78){
-                    p.clear();
-                    p.background(0);
+                reducer = 6 - (ticks % 61440) / 7680;
+            if(currentCue < 105) {
+                if(currentCue % 8 === 0){
+                    p.startingCount = Math.floor(Math.random() * 8) + 1;
+                    if(currentCue >= 78){
+                        p.clear();
+                        p.background(0);
+                    }
+                }
+                if (currentCue >= 104) {
+                    p.strokeWeight(p.width / 1024);
+                }
+                else if (currentCue >= 26) {
+                    p.strokeWeight(p.width / 768);
+                } 
+                let size = currentCue <= 52 ? p.width / 16 : p.width / 4;
+                    size = currentCue <= 104 ? size : p.width / 8;
+                p.drawOctagonGrid(reducer, size, currentCue / 2);
+            }
+        }
+
+        p.executeCueSet2 = (note) => {
+            const { currentCue } = note;
+            if(currentCue > 80) {
+                let octagons = p.melodicOctagons.filter(oct => oct.canDraw === false);
+                octagons = ShuffleArray(octagons);
+                if(octagons.length){
+                    const octagon = octagons[0];
+                    octagon.canDraw = true;
                 }
             }
-            if (currentCue >= 104) {
-                p.strokeWeight(p.width / 1024);
-            }
-            else if (currentCue >= 26) {
-                p.strokeWeight(p.width / 768);
-            } 
-            let size = currentCue <= 52 ? p.width / 16 : p.width / 4;
-                size = currentCue <= 104 ? size : p.width / 8;
-            p.drawOctagonGrid(reducer, size, currentCue / 2);
             
-            // let end = p.millis();
-            // let elapsed = end - start;
-            //     console.log("This took: " + elapsed + "ms.");
+        }
+
+        p.populateMelodicOctagons = () => {
+            const size = p.width / 8,
+                radius = size/2;
+            let count = 0;
+            for (let x = 0; x <= p.width + size; x += size) {
+                for (let y = 0; y <= p.height + size; y += size) {
+                    const colour = p.colours[count];
+                    p.melodicOctagons.push(
+                        new Octagon(p, x, y, radius, colour, p.whiteStroke)
+                    );
+                    p.whiteStroke = !p.whiteStroke;
+                    count++;
+                    if (count > 8) {
+                        count = 0;
+                    }
+                }
+            }
         }
 
         p.whiteStroke = false;
@@ -234,7 +272,7 @@ const P5SketchWithAudio = () => {
                 p.vertex(sx, sy);
             }
             p.endShape(p.CLOSE);
-            };
+        };
 
         p.mousePressed = () => {
             if(p.audioLoaded){
